@@ -60,5 +60,31 @@
       "createdAt": "2026-09-17T02:30:00.000Z",
       "updatedAt": "2026-09-17T02:30:00.000Z"
     }
+  ],
+  "executions": [
+    {
+      "id": "791f8ca1-69d3-4301-a0cc-bbbd80999c84",
+      "method": "GET",
+      "url": "http://127.0.0.1:5064/demo/items?page=2&size=2",
+      "internal": true,
+      "outcome": "success",
+      "status": 200,
+      "timeMs": 7,
+      "failureReason": "",
+      "failureDetail": "",
+      "occurredAt": "2026-09-18T07:08:18.278Z"
+    },
+    {
+      "id": "e6c1ec98-5d06-4fd3-9584-39afa0dfe976",
+      "method": "GET",
+      "url": "http://127.0.0.1:5064/demo/items?page=2&size=2",
+      "internal": true,
+      "outcome": "success",
+      "status": 200,
+      "timeMs": 11,
+      "failureReason": "",
+      "failureDetail": "",
+      "occurredAt": "2026-09-18T07:08:53.203Z"
+    }
   ]
 }

@@ -201,6 +201,7 @@ body {
 }
 
 input[type="text"],
+input[type="datetime-local"],
 select,
 textarea {
   width: 100%;
@@ -211,6 +212,10 @@ textarea {
   color: var(--text);
   font-family: inherit;
   font-size: 13px;
+}
+
+input[type="datetime-local"] {
+  font-size: 12px;
 }
 
 textarea {
@@ -814,6 +819,107 @@ input.invalid,
   word-break: break-all;
 }
 
+/* ---------- 执行记录区 ---------- */
+
+.execution-panel {
+  max-width: 1320px;
+  margin: 18px auto 0;
+}
+
+.execution-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) 150px minmax(200px, 1.1fr) minmax(200px, 1.1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafbfd;
+}
+
+.filter-field label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.execution-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.execution-item {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--success);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.execution-item.execution-failed {
+  border-left-color: var(--danger);
+  background: #fffdfc;
+}
+
+.execution-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.execution-outcome {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.outcome-success {
+  color: var(--success);
+}
+
+.outcome-failed {
+  color: var(--danger);
+}
+
+.execution-url {
+  margin: 6px 0 0;
+  color: var(--text-soft);
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.execution-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.execution-reason {
+  margin: 6px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.execution-detail {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
 /* ---------- 窄屏 ---------- */
 
 @media (max-width: 1080px) {
@@ -837,5 +943,23 @@ input.invalid,
   .case-item,
   .demo-item {
     flex-direction: column;
+  }
+
+  .execution-filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .filter-url {
+    grid-column: 1 / -1;
+  }
+
+  .filter-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .execution-filters {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

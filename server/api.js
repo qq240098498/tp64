@@ -179,6 +179,69 @@ function deleteCase(id) {
   return { id: removed.id, name: removed.name };
 }
 
+// 把常见失败状态码说成能直接看懂的结论
+function describeFailedStatus(status, statusText) {
+  const known = {
+    400: '目标认为请求参数不合法，拒绝了这次请求',
+    401: '目标要求先提供身份凭证',
+    403: '身份凭证有效，但目标不允许访问',
+    404: '目标地址对应的资源不存在',
+    409: '目标认为这次请求与当前状态冲突',
+    429: '请求过于频繁，被目标限流了',
+    500: '目标服务内部处理失败',
+    502: '目标的上游服务返回了异常',
+    503: '目标服务暂时不可用',
+    504: '目标等待上游响应超时',
+  };
+  const suffix = statusText ? `（${statusText}）` : '';
+  return known[status] || `目标返回了失败状态码 ${status}${suffix}`;
+}
+
+// 每发送一次就落一条执行记录：记下目标地址、请求方式、结论、耗时与发生时刻
+// 结论口径与结果区一致：拿到 400 以下状态算成功，网络层未完成或拿到 4xx/5xx 都算失败
+function createExecution(draft, result, occurredAt) {
+  const data = load();
+  let outcome = 'success';
+  let failureReason = '';
+  let failureDetail = '';
+  if (!result.ok) {
+    outcome = 'failed';
+    failureReason = (result.failure && result.failure.reason) || '这次请求没有成功完成';
+    failureDetail = (result.failure && result.failure.detail) || '';
+  } else if (result.status >= 400) {
+    outcome = 'failed';
+    failureReason = describeFailedStatus(result.status, result.statusText);
+    failureDetail = `目标地址返回状态码 ${result.status}${result.statusText ? `（${result.statusText}）` : ''}`;
+  }
+
+  const record = {
+    id: crypto.randomUUID(),
+    method: draft.method,
+    url: result.targetUrl || draft.url,
+    internal: Boolean(result.internal),
+    outcome,
+    status: result.ok ? result.status : 0,
+    timeMs: Number.isFinite(Number(result.timeMs)) ? Number(result.timeMs) : 0,
+    failureReason,
+    failureDetail,
+    occurredAt: occurredAt || new Date().toISOString(),
+  };
+  data.executions.push(record);
+  save(data);
+  return record;
+}
+
+// 执行记录按发生时刻从新到旧排列；同一时刻用 id 兜底决胜，形成与筛选条件无关的全序
+function listExecutions() {
+  const data = load();
+  return data.executions
+    .slice()
+    .sort((a, b) => {
+      if (a.occurredAt === b.occurredAt) return a.id < b.id ? 1 : -1;
+      return a.occurredAt < b.occurredAt ? 1 : -1;
+    });
+}
+
 module.exports = {
   ApiError,
   ALLOWED_METHODS,
@@ -187,4 +250,6 @@ module.exports = {
   getCase,
   createCase,
   deleteCase,
+  createExecution,
+  listExecutions,
 };

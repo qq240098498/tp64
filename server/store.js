@@ -5,7 +5,7 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const DATA_FILE = path.join(DATA_DIR, 'db.json');
 const TEMP_FILE = path.join(DATA_DIR, 'db.json.tmp');
 
-// 初始数据：当前版本只维护用例集合，示例用例都指向内置示例接口，装上依赖就能直接发送
+// 初始数据：用例集合内置四条示例，执行记录从空开始，发送一次就补一条
 function seedData() {
   return {
     cases: [
@@ -76,11 +76,35 @@ function normalizeCase(item) {
   };
 }
 
-// 整份数据只保证 cases 一定存在且元素结构一致
+// 把单条执行记录整理成固定结构，避免数据文件被手工改动后出现缺字段
+function normalizeExecution(item) {
+  const source = item && typeof item === 'object' ? item : {};
+  const occurredAt =
+    typeof source.occurredAt === 'string' && source.occurredAt ? source.occurredAt : new Date().toISOString();
+  const outcome = source.outcome === 'success' ? 'success' : 'failed';
+  return {
+    id: typeof source.id === 'string' ? source.id : '',
+    method: typeof source.method === 'string' && source.method ? source.method.toUpperCase() : 'GET',
+    url: typeof source.url === 'string' ? source.url : '',
+    internal: Boolean(source.internal),
+    outcome,
+    // 成功完成时记录目标返回的状态码；未完成的发送没有状态码
+    status: Number.isInteger(source.status) && source.status > 0 ? source.status : 0,
+    timeMs: Number.isFinite(Number(source.timeMs)) && Number(source.timeMs) >= 0 ? Number(source.timeMs) : 0,
+    failureReason: outcome === 'failed' && typeof source.failureReason === 'string' ? source.failureReason : '',
+    failureDetail: outcome === 'failed' && typeof source.failureDetail === 'string' ? source.failureDetail : '',
+    occurredAt,
+  };
+}
+
+// 整份数据只保证 cases 与 executions 一定存在且元素结构一致
 function normalize(raw) {
   const source = raw && typeof raw === 'object' ? raw : {};
   const cases = Array.isArray(source.cases) ? source.cases.map(normalizeCase).filter((item) => item.id) : [];
-  return { ...source, cases };
+  const executions = Array.isArray(source.executions)
+    ? source.executions.map(normalizeExecution).filter((item) => item.id)
+    : [];
+  return { ...source, cases, executions };
 }
 
 // 读取数据文件：文件缺失或内容损坏时回落到初始数据并立刻补写

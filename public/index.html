@@ -122,6 +122,44 @@
     </div>
   </main>
 
+  <section class="panel execution-panel" id="execution-panel">
+    <div class="panel-head">
+      <h2>执行记录</h2>
+      <div class="panel-head-right">
+        <span class="counter" id="execution-summary">共 0 条</span>
+        <button type="button" class="btn btn-ghost btn-small" id="refresh-executions">刷新记录</button>
+      </div>
+    </div>
+
+    <div class="execution-filters">
+      <div class="filter-field filter-url">
+        <label for="filter-url">目标地址</label>
+        <input id="filter-url" type="text" autocomplete="off" placeholder="按地址关键字筛选" />
+      </div>
+      <div class="filter-field filter-outcome">
+        <label for="filter-outcome">结论</label>
+        <select id="filter-outcome">
+          <option value="">全部结论</option>
+          <option value="success">成功</option>
+          <option value="failed">失败</option>
+        </select>
+      </div>
+      <div class="filter-field filter-time">
+        <label for="filter-from">开始时刻</label>
+        <input id="filter-from" type="datetime-local" step="1" />
+      </div>
+      <div class="filter-field filter-time">
+        <label for="filter-to">结束时刻</label>
+        <input id="filter-to" type="datetime-local" step="1" />
+      </div>
+      <div class="filter-actions">
+        <button type="button" class="btn btn-small" id="clear-filters">清空筛选</button>
+      </div>
+    </div>
+
+    <div class="execution-list" id="execution-list"></div>
+  </section>
+
   <script src="./app.js"></script>
 </body>
 </html>

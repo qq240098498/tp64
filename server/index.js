@@ -23,7 +23,7 @@ app.get('/api/demos', (_req, res) => {
   res.json({ endpoints: demos.listEndpoints() });
 });
 
-// 发送请求：先按保存用例的同一套规则校验草稿，再真正发出去并回传结果
+// 发送请求：先按保存用例的同一套规则校验草稿，再真正发出去；每发一次都补一条执行记录
 app.post('/api/send', async (req, res) => {
   let draft = null;
   try {
@@ -32,7 +32,17 @@ app.post('/api/send', async (req, res) => {
     return sendError(res, err);
   }
   const result = await target.sendOutgoing(draft, PORT);
+  // 留痕失败不应影响这次已经拿到的发送结果
+  try {
+    api.createExecution(draft, result);
+  } catch (err) {
+    console.error('[tp64] 写入执行记录失败：', err);
+  }
   return res.json(result);
+});
+
+app.get('/api/executions', (_req, res) => {
+  res.json(api.listExecutions());
 });
 
 app.get('/api/cases', (_req, res) => {

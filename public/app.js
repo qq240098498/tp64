@@ -10,6 +10,8 @@
     busy: false,
     result: null,
     resultView: 'structured',
+    executions: [],
+    filters: { url: '', outcome: '', from: '', to: '' },
   };
 
   const dom = {
@@ -34,6 +36,14 @@
     refreshCases: document.getElementById('refresh-cases'),
     caseDetail: document.getElementById('case-detail'),
     closeDetail: document.getElementById('close-detail'),
+    executionList: document.getElementById('execution-list'),
+    executionSummary: document.getElementById('execution-summary'),
+    refreshExecutions: document.getElementById('refresh-executions'),
+    filterUrl: document.getElementById('filter-url'),
+    filterOutcome: document.getElementById('filter-outcome'),
+    filterFrom: document.getElementById('filter-from'),
+    filterTo: document.getElementById('filter-to'),
+    clearFilters: document.getElementById('clear-filters'),
   };
 
   const emptyDetailHint = '在用例列表点「详情」，这里显示该用例保存下来的目标地址、请求头与请求内容。';
@@ -301,6 +311,12 @@
       const result = await request('/api/send', { method: 'POST', body: draft });
       state.result = result;
       renderResult(result);
+      // 每发送一次服务端都会补一条记录，刷新执行记录区让新记录立刻出现（筛选保持不变）
+      try {
+        await loadExecutions();
+      } catch (logError) {
+        // 记录刷新失败不影响这次发送结果的展示
+      }
       if (result.ok) {
         showNotice(`请求已完成：状态码 ${result.status}，耗时 ${formatDuration(result.timeMs)}`, 'success');
       } else {
@@ -810,6 +826,124 @@
     }
   }
 
+  // ---------------- 执行记录区 ----------------
+
+  async function loadExecutions() {
+    const list = await request('/api/executions');
+    state.executions = Array.isArray(list) ? list : [];
+    renderExecutions();
+  }
+
+  // 客户端再按「时刻从新到旧、同一时刻以 id 兜底」排一次，保证顺序不依赖接口返回次序
+  function sortExecutions(list) {
+    return list.slice().sort((a, b) => {
+      if (a.occurredAt === b.occurredAt) return a.id < b.id ? 1 : -1;
+      return a.occurredAt < b.occurredAt ? 1 : -1;
+    });
+  }
+
+  // 多个筛选条件叠加时取交集；只过滤、不改变全序，所以同一组条件反复筛选顺序完全一致
+  function getFilteredExecutions() {
+    const { url, outcome, from, to } = state.filters;
+    const keyword = url.trim().toLowerCase();
+    const fromTime = from ? new Date(from).getTime() : NaN;
+    const toTime = to ? new Date(to).getTime() : NaN;
+
+    return sortExecutions(state.executions).filter((item) => {
+      if (keyword && !String(item.url || '').toLowerCase().includes(keyword)) return false;
+      if (outcome && item.outcome !== outcome) return false;
+      if (Number.isFinite(fromTime) || Number.isFinite(toTime)) {
+        const time = new Date(item.occurredAt).getTime();
+        if (Number.isFinite(fromTime) && time < fromTime) return false;
+        if (Number.isFinite(toTime) && time > toTime) return false;
+      }
+      return true;
+    });
+  }
+
+  function hasActiveFilter() {
+    const f = state.filters;
+    return Boolean(f.url.trim() || f.outcome || f.from || f.to);
+  }
+
+  function renderExecutions() {
+    dom.executionList.textContent = '';
+    const filtered = getFilteredExecutions();
+
+    if (!state.executions.length) {
+      dom.executionSummary.textContent = '共 0 条';
+      dom.executionList.appendChild(
+        buildEmptyBlock('还没有执行记录', '在请求区填好内容后点「发送请求」，每发送一次这里就会留下一条执行记录。')
+      );
+      return;
+    }
+
+    dom.executionSummary.textContent = hasActiveFilter()
+      ? `符合 ${filtered.length} 条 / 共 ${state.executions.length} 条`
+      : `共 ${state.executions.length} 条`;
+
+    if (!filtered.length) {
+      dom.executionList.appendChild(
+        buildEmptyBlock('没有符合条件的执行记录', '试着放宽目标地址、结论或时刻区间的筛选条件。')
+      );
+      return;
+    }
+
+    filtered.forEach((item) => {
+      dom.executionList.appendChild(buildExecutionRow(item));
+    });
+  }
+
+  function buildExecutionRow(item) {
+    const row = document.createElement('article');
+    row.className = 'execution-item';
+    if (item.outcome === 'failed') row.classList.add('execution-failed');
+
+    const title = document.createElement('div');
+    title.className = 'execution-title';
+    title.appendChild(buildTag(item.method, String(item.method).toLowerCase()));
+    if (item.internal) title.appendChild(buildTag('内置', 'inner'));
+
+    const outcomeNode = document.createElement('span');
+    if (item.outcome === 'success') {
+      outcomeNode.className = 'execution-outcome outcome-success';
+      outcomeNode.textContent = `成功 · 状态码 ${item.status || '未知'}`;
+    } else {
+      outcomeNode.className = 'execution-outcome outcome-failed';
+      outcomeNode.textContent = item.status ? `失败 · 状态码 ${item.status}` : '失败 · 请求未完成';
+    }
+    title.appendChild(outcomeNode);
+
+    const urlNode = document.createElement('p');
+    urlNode.className = 'execution-url';
+    urlNode.textContent = item.url;
+    urlNode.title = item.url;
+
+    const metaNode = document.createElement('p');
+    metaNode.className = 'execution-meta';
+    const timeNode = document.createElement('span');
+    timeNode.textContent = `时刻：${formatTime(item.occurredAt)}`;
+    const costNode = document.createElement('span');
+    costNode.textContent = `耗时：${formatDuration(item.timeMs)}`;
+    metaNode.append(timeNode, costNode);
+
+    row.append(title, urlNode, metaNode);
+
+    if (item.outcome === 'failed' && item.failureReason) {
+      const reasonNode = document.createElement('p');
+      reasonNode.className = 'execution-reason';
+      reasonNode.textContent = `失败原因：${item.failureReason}`;
+      row.appendChild(reasonNode);
+      if (item.failureDetail) {
+        const detailNode = document.createElement('p');
+        detailNode.className = 'execution-detail';
+        detailNode.textContent = `详细信息：${item.failureDetail}`;
+        row.appendChild(detailNode);
+      }
+    }
+    return row;
+  }
+
   // ---------------- 结果区小零件 ----------------
 
   function buildSection(title) {
@@ -965,6 +1099,42 @@
       }
     });
 
+    dom.refreshExecutions.addEventListener('click', async () => {
+      if (state.busy) return;
+      try {
+        await loadExecutions();
+        showNotice('执行记录已刷新', 'info');
+      } catch (err) {
+        showNotice(err.message, 'error');
+      }
+    });
+
+    // 筛选条件变化时即时过滤；无论条件按什么顺序调整，列表顺序都由同一全序决定
+    dom.filterUrl.addEventListener('input', () => {
+      state.filters.url = dom.filterUrl.value;
+      renderExecutions();
+    });
+    dom.filterOutcome.addEventListener('change', () => {
+      state.filters.outcome = dom.filterOutcome.value;
+      renderExecutions();
+    });
+    dom.filterFrom.addEventListener('change', () => {
+      state.filters.from = dom.filterFrom.value;
+      renderExecutions();
+    });
+    dom.filterTo.addEventListener('change', () => {
+      state.filters.to = dom.filterTo.value;
+      renderExecutions();
+    });
+    dom.clearFilters.addEventListener('click', () => {
+      state.filters = { url: '', outcome: '', from: '', to: '' };
+      dom.filterUrl.value = '';
+      dom.filterOutcome.value = '';
+      dom.filterFrom.value = '';
+      dom.filterTo.value = '';
+      renderExecutions();
+    });
+
     dom.closeDetail.addEventListener('click', () => {
       state.selectedId = '';
       renderCases();
@@ -984,6 +1154,15 @@
       await loadCases();
     } catch (err) {
       showNotice(err.message, 'error');
+    }
+    try {
+      await loadExecutions();
+    } catch (err) {
+      dom.executionSummary.textContent = '读取失败';
+      dom.executionList.textContent = '';
+      dom.executionList.appendChild(
+        buildEmptyBlock('执行记录暂时读取不到', '可以稍后点「刷新记录」重试。')
+      );
     }
   }
 
