@@ -2,6 +2,7 @@
   'use strict';
 
   // 页面状态：用例列表、内置示例接口、请求头草稿行、最近一次响应结果与结果视图
+  // execFilters 只在点下「筛选」时更新，保证同一组条件重复筛选拿到的是同一套结果与顺序
   const state = {
     cases: [],
     selectedId: '',
@@ -10,6 +11,8 @@
     busy: false,
     result: null,
     resultView: 'structured',
+    executions: [],
+    execFilters: { url: '', conclusion: '', from: '', to: '' },
   };
 
   const dom = {
@@ -34,6 +37,16 @@
     refreshCases: document.getElementById('refresh-cases'),
     caseDetail: document.getElementById('case-detail'),
     closeDetail: document.getElementById('close-detail'),
+    execList: document.getElementById('exec-list'),
+    execSummary: document.getElementById('exec-summary'),
+    refreshExec: document.getElementById('refresh-exec'),
+    filterUrl: document.getElementById('filter-exec-url'),
+    filterConclusion: document.getElementById('filter-exec-conclusion'),
+    filterFrom: document.getElementById('filter-exec-from'),
+    filterTo: document.getElementById('filter-exec-to'),
+    applyExecFilters: document.getElementById('apply-exec-filters'),
+    resetExecFilters: document.getElementById('reset-exec-filters'),
+    execFilterError: document.getElementById('exec-filter-error'),
   };
 
   const emptyDetailHint = '在用例列表点「详情」，这里显示该用例保存下来的目标地址、请求头与请求内容。';
@@ -305,6 +318,12 @@
         showNotice(`请求已完成：状态码 ${result.status}，耗时 ${formatDuration(result.timeMs)}`, 'success');
       } else {
         showNotice(`请求失败：${result.failure.reason}`, 'error');
+      }
+      // 每发送一次都会留下执行记录，按当前筛选条件刷新记录区
+      try {
+        await loadExecutions();
+      } catch (reloadError) {
+        showNotice(`执行记录刷新失败：${reloadError.message}`, 'error');
       }
     } catch (err) {
       state.result = null;
@@ -756,6 +775,153 @@
     dom.caseDetail.appendChild(subNode);
   }
 
+  // ---------------- 执行记录 ----------------
+
+  // 按当前已生效的筛选条件拉取记录；条件为空时不带对应参数，全部由服务端按时刻从新到旧返回
+  async function loadExecutions() {
+    const query = new URLSearchParams();
+    const filters = state.execFilters;
+    if (filters.url) query.set('url', filters.url);
+    if (filters.conclusion) query.set('conclusion', filters.conclusion);
+    if (filters.from) query.set('from', filters.from);
+    if (filters.to) query.set('to', filters.to);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    const list = await request(`/api/executions${suffix}`);
+    state.executions = Array.isArray(list) ? list : [];
+    renderExecutions();
+  }
+
+  function filtersActive() {
+    const filters = state.execFilters;
+    return Boolean(filters.url || filters.conclusion || filters.from || filters.to);
+  }
+
+  function renderExecutions() {
+    const active = filtersActive();
+    dom.execSummary.textContent = active
+      ? `筛选得到 ${state.executions.length} 条`
+      : `共 ${state.executions.length} 条`;
+    dom.execList.textContent = '';
+
+    if (!state.executions.length) {
+      dom.execList.appendChild(
+        buildEmptyBlock(
+          active ? '没有符合条件的执行记录' : '还没有执行记录',
+          active
+            ? '试着放宽目标地址、结论或时刻区间条件，或点重置看全部记录。'
+            : '在请求区点发送请求后，无论成功还是失败，这里都会按时刻从新到旧留下一条记录。'
+        )
+      );
+      return;
+    }
+    state.executions.forEach((item) => {
+      dom.execList.appendChild(buildExecutionRow(item));
+    });
+  }
+
+  function buildExecutionRow(item) {
+    const row = document.createElement('article');
+    row.className = 'exec-item';
+
+    const head = document.createElement('div');
+    head.className = 'exec-item-head';
+
+    const methodKind = ['get', 'post', 'put', 'patch', 'delete'].includes(String(item.method).toLowerCase())
+      ? String(item.method).toLowerCase()
+      : 'any';
+    head.appendChild(buildTag(item.method, methodKind));
+
+    const conclusion = document.createElement('span');
+    if (item.conclusion === 'failure') {
+      conclusion.className = 'exec-conclusion exec-conclusion-failure';
+      conclusion.textContent = '失败';
+    } else {
+      conclusion.className = 'exec-conclusion exec-conclusion-success';
+      conclusion.textContent = item.status ? `成功 ${item.status}` : '成功';
+    }
+    head.appendChild(conclusion);
+
+    const timeNode = document.createElement('span');
+    timeNode.className = 'exec-time';
+    timeNode.textContent = `发生时刻 ${formatTime(item.occurredAt)}`;
+    head.appendChild(timeNode);
+
+    const urlNode = document.createElement('p');
+    urlNode.className = 'exec-url';
+    urlNode.textContent = `目标地址：${item.url}`;
+
+    const metaNode = document.createElement('p');
+    metaNode.className = 'exec-meta';
+    const metaParts = [`请求方式 ${item.method}`, `耗时 ${formatDuration(item.timeMs)}`];
+    if (item.conclusion === 'success' && item.status) metaParts.push(`状态码 ${item.status}`);
+    metaNode.textContent = metaParts.join(' · ');
+
+    row.append(head, urlNode, metaNode);
+
+    // 失败的记录额外展示可读的失败原因
+    if (item.conclusion === 'failure' && item.reason) {
+      const reasonNode = document.createElement('p');
+      reasonNode.className = 'exec-reason';
+      reasonNode.textContent = `失败原因：${item.reason}`;
+      row.appendChild(reasonNode);
+    }
+    return row;
+  }
+
+  function showExecFilterError(message) {
+    dom.execFilterError.textContent = message;
+    dom.execFilterError.hidden = false;
+  }
+
+  function clearExecFilterError() {
+    dom.execFilterError.textContent = '';
+    dom.execFilterError.hidden = true;
+  }
+
+  // 点下筛选才让输入框里的条件生效；同一组条件重复点筛选，请求参数完全相同，返回顺序也完全一致
+  async function applyExecFilters() {
+    clearExecFilterError();
+    const url = dom.filterUrl.value.trim();
+    const conclusion = dom.filterConclusion.value;
+    const from = dom.filterFrom.value;
+    const to = dom.filterTo.value;
+
+    if (from && Number.isNaN(new Date(from).getTime())) {
+      showExecFilterError('起始时刻无法识别，请按时间输入框的格式填写');
+      return;
+    }
+    if (to && Number.isNaN(new Date(to).getTime())) {
+      showExecFilterError('截止时刻无法识别，请按时间输入框的格式填写');
+      return;
+    }
+    if (from && to && new Date(from).getTime() > new Date(to).getTime()) {
+      showExecFilterError('起始时刻不能晚于截止时刻');
+      return;
+    }
+
+    state.execFilters = { url, conclusion, from, to };
+    try {
+      await loadExecutions();
+    } catch (err) {
+      showExecFilterError(err.message);
+      showNotice(err.message, 'error');
+    }
+  }
+
+  async function resetExecFilters() {
+    dom.filterUrl.value = '';
+    dom.filterConclusion.value = '';
+    dom.filterFrom.value = '';
+    dom.filterTo.value = '';
+    clearExecFilterError();
+    state.execFilters = { url: '', conclusion: '', from: '', to: '' };
+    try {
+      await loadExecutions();
+    } catch (err) {
+      showNotice(err.message, 'error');
+    }
+  }
+
   // ---------------- 保存与删除 ----------------
 
   async function saveCase() {
@@ -970,6 +1136,36 @@
       renderCases();
       renderEmptyDetail();
     });
+
+    dom.refreshExec.addEventListener('click', async () => {
+      if (state.busy) return;
+      try {
+        await loadExecutions();
+        showNotice('执行记录已刷新', 'info');
+      } catch (err) {
+        showNotice(err.message, 'error');
+      }
+    });
+
+    dom.applyExecFilters.addEventListener('click', () => {
+      if (state.busy) return;
+      applyExecFilters();
+    });
+
+    dom.resetExecFilters.addEventListener('click', () => {
+      if (state.busy) return;
+      resetExecFilters();
+    });
+
+    // 在地址筛选框里回车等同点筛选，时刻框回车也一并生效
+    [dom.filterUrl, dom.filterFrom, dom.filterTo].forEach((input) => {
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          applyExecFilters();
+        }
+      });
+    });
   }
 
   async function init() {
@@ -977,11 +1173,17 @@
     renderHeaderRows();
     renderEmptyDetail();
     renderEmptyResult();
+    renderExecutions();
     renderCases();
     await checkHealth();
     await loadDemos();
     try {
       await loadCases();
+    } catch (err) {
+      showNotice(err.message, 'error');
+    }
+    try {
+      await loadExecutions();
     } catch (err) {
       showNotice(err.message, 'error');
     }

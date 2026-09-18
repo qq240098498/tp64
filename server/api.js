@@ -125,10 +125,7 @@ function listCases() {
   const data = load();
   return data.cases
     .slice()
-    .sort((a, b) => {
-      if (a.createdAt === b.createdAt) return a.id < b.id ? 1 : -1;
-      return a.createdAt < b.createdAt ? 1 : -1;
-    });
+    .sort(compareNewestFirst('createdAt'));
 }
 
 function getCase(id) {
@@ -179,6 +176,91 @@ function deleteCase(id) {
   return { id: removed.id, name: removed.name };
 }
 
+// ---------------- 执行记录 ----------------
+
+// 按时刻从新到旧排列；同一时刻用 id 兜底，保证任何情况下顺序都确定
+function compareNewestFirst(timeField) {
+  return (a, b) => {
+    if (a[timeField] === b[timeField]) return a.id < b.id ? 1 : -1;
+    return a[timeField] < b[timeField] ? 1 : -1;
+  };
+}
+
+// 把一次发送的结果整理成执行记录并落盘。
+// 结论失败有两种：请求没有完成（网络层失败），以及目标返回了 400 及以上的失败状态码——
+// 这与结果区把 4xx/5xx 标成失败状态的口径保持一致；两种失败都要给出可读原因。
+// occurredAt 在真正发出前取好，记录的是这一次发送发生的时刻。
+function recordExecution(draft, result, occurredAt) {
+  const transportFailed = !result.ok;
+  const httpFailed = !transportFailed && Number(result.status) >= 400;
+  const failed = transportFailed || httpFailed;
+
+  let reason = '';
+  if (transportFailed) {
+    reason = result.failure ? String(result.failure.reason || '') : '';
+  } else if (httpFailed) {
+    reason = result.statusText
+      ? `目标地址返回失败状态码 ${result.status}（${result.statusText}）`
+      : `目标地址返回失败状态码 ${result.status}`;
+  }
+
+  const record = {
+    id: crypto.randomUUID(),
+    method: draft.method,
+    url: result.targetUrl || draft.url,
+    conclusion: failed ? 'failure' : 'success',
+    status: transportFailed ? null : Number(result.status) || null,
+    timeMs: Number(result.timeMs) || 0,
+    reason,
+    occurredAt,
+  };
+  const data = load();
+  data.executions.push(record);
+  save(data);
+  return record;
+}
+
+// 结论只接受这两种取值，其余按未填写处理
+function normalizeConclusion(value) {
+  const text = pickText(value);
+  if (text === 'success' || text === 'failure') return text;
+  return '';
+}
+
+// 时刻区间的端点需要能解析成时间，填了但不合法时明确指出，避免筛选静默失效
+function parseTimeBoundary(value, field, label) {
+  const text = pickText(value);
+  if (!text) return null;
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new ApiError(400, 'EXEC_TIME_INVALID', `${label}需要是可识别的时间，例如 2026-09-18 09:00`, field);
+  }
+  return parsed.getTime();
+}
+
+// 执行记录巡检：地址关键字、结论、时刻区间多个条件同时给出时逐项取交集
+function listExecutions(query) {
+  const filters = query && typeof query === 'object' ? query : {};
+  const urlKeyword = pickText(filters.url);
+  const conclusion = normalizeConclusion(filters.conclusion);
+  const lower = parseTimeBoundary(filters.from, 'from', '起始时刻');
+  const upper = parseTimeBoundary(filters.to, 'to', '截止时刻');
+  if (lower !== null && upper !== null && lower > upper) {
+    throw new ApiError(400, 'EXEC_TIME_RANGE_INVALID', '起始时刻不能晚于截止时刻', 'from');
+  }
+
+  const keyword = urlKeyword.toLowerCase();
+  const list = load().executions.filter((item) => {
+    if (keyword && !item.url.toLowerCase().includes(keyword)) return false;
+    if (conclusion && item.conclusion !== conclusion) return false;
+    const time = Date.parse(item.occurredAt);
+    if (lower !== null && time < lower) return false;
+    if (upper !== null && time > upper) return false;
+    return true;
+  });
+  return list.sort(compareNewestFirst('occurredAt'));
+}
+
 module.exports = {
   ApiError,
   ALLOWED_METHODS,
@@ -187,4 +269,6 @@ module.exports = {
   getCase,
   createCase,
   deleteCase,
+  recordExecution,
+  listExecutions,
 };

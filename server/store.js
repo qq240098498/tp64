@@ -5,7 +5,7 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const DATA_FILE = path.join(DATA_DIR, 'db.json');
 const TEMP_FILE = path.join(DATA_DIR, 'db.json.tmp');
 
-// 初始数据：当前版本只维护用例集合，示例用例都指向内置示例接口，装上依赖就能直接发送
+// 初始数据：用例集合的示例都指向内置示例接口，装上依赖就能直接发送；执行记录初始为空，发送后才有内容
 function seedData() {
   return {
     cases: [
@@ -76,11 +76,31 @@ function normalizeCase(item) {
   };
 }
 
-// 整份数据只保证 cases 一定存在且元素结构一致
+// 把单条执行记录整理成固定结构，避免数据文件被手工改动后出现缺字段
+function normalizeExecution(item) {
+  const source = item && typeof item === 'object' ? item : {};
+  const occurredAt =
+    typeof source.occurredAt === 'string' && source.occurredAt ? source.occurredAt : new Date().toISOString();
+  return {
+    id: typeof source.id === 'string' ? source.id : '',
+    method: typeof source.method === 'string' && source.method ? source.method.toUpperCase() : 'GET',
+    url: typeof source.url === 'string' ? source.url : '',
+    conclusion: source.conclusion === 'failure' ? 'failure' : 'success',
+    status: Number.isInteger(source.status) ? source.status : null,
+    timeMs: Number.isFinite(Number(source.timeMs)) ? Number(source.timeMs) : 0,
+    reason: typeof source.reason === 'string' ? source.reason : '',
+    occurredAt,
+  };
+}
+
+// 整份数据保证 cases 与 executions 都存在且元素结构一致
 function normalize(raw) {
   const source = raw && typeof raw === 'object' ? raw : {};
   const cases = Array.isArray(source.cases) ? source.cases.map(normalizeCase).filter((item) => item.id) : [];
-  return { ...source, cases };
+  const executions = Array.isArray(source.executions)
+    ? source.executions.map(normalizeExecution).filter((item) => item.id && item.url)
+    : [];
+  return { ...source, cases, executions };
 }
 
 // 读取数据文件：文件缺失或内容损坏时回落到初始数据并立刻补写

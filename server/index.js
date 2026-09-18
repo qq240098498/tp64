@@ -23,7 +23,7 @@ app.get('/api/demos', (_req, res) => {
   res.json({ endpoints: demos.listEndpoints() });
 });
 
-// 发送请求：先按保存用例的同一套规则校验草稿，再真正发出去并回传结果
+// 发送请求：先按保存用例的同一套规则校验草稿，再真正发出去；无论成功失败都留一条执行记录，然后回传结果
 app.post('/api/send', async (req, res) => {
   let draft = null;
   try {
@@ -31,8 +31,15 @@ app.post('/api/send', async (req, res) => {
   } catch (err) {
     return sendError(res, err);
   }
+  const occurredAt = new Date().toISOString();
   const result = await target.sendOutgoing(draft, PORT);
-  return res.json(result);
+  let record = null;
+  try {
+    record = api.recordExecution(draft, result, occurredAt);
+  } catch (err) {
+    console.error('[tp64] 写入执行记录失败：', err);
+  }
+  return res.json({ ...result, executionId: record ? record.id : '' });
 });
 
 app.get('/api/cases', (_req, res) => {
@@ -58,6 +65,15 @@ app.post('/api/cases', (req, res) => {
 app.delete('/api/cases/:id', (req, res) => {
   try {
     res.json(api.deleteCase(req.params.id));
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 执行记录巡检：按目标地址、结论、时刻区间叠加筛选，服务端统一按时刻从新到旧返回
+app.get('/api/executions', (req, res) => {
+  try {
+    res.json(api.listExecutions(req.query));
   } catch (err) {
     sendError(res, err);
   }

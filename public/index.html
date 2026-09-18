@@ -122,6 +122,48 @@
     </div>
   </main>
 
+  <div class="layout-below">
+    <section class="panel" id="execution-panel">
+      <div class="panel-head">
+        <h2>执行记录</h2>
+        <div class="panel-head-right">
+          <span class="counter" id="exec-summary">共 0 条</span>
+          <button type="button" class="btn btn-ghost btn-small" id="refresh-exec">刷新记录</button>
+        </div>
+      </div>
+
+      <div class="exec-filters">
+        <div class="exec-filter exec-filter-url">
+          <label for="filter-exec-url">目标地址</label>
+          <input id="filter-exec-url" type="text" autocomplete="off" spellcheck="false" placeholder="按地址关键字筛选，例如 /demo/echo" />
+        </div>
+        <div class="exec-filter exec-filter-conclusion">
+          <label for="filter-exec-conclusion">结论</label>
+          <select id="filter-exec-conclusion">
+            <option value="">全部结论</option>
+            <option value="success">成功</option>
+            <option value="failure">失败</option>
+          </select>
+        </div>
+        <div class="exec-filter exec-filter-time">
+          <label for="filter-exec-from">发生时刻起</label>
+          <input id="filter-exec-from" type="datetime-local" step="1" />
+        </div>
+        <div class="exec-filter exec-filter-time">
+          <label for="filter-exec-to">发生时刻止</label>
+          <input id="filter-exec-to" type="datetime-local" step="1" />
+        </div>
+        <div class="exec-filter-actions">
+          <button type="button" class="btn btn-primary btn-small" id="apply-exec-filters">筛选</button>
+          <button type="button" class="btn btn-small" id="reset-exec-filters">重置</button>
+        </div>
+      </div>
+      <p class="field-error" id="exec-filter-error" hidden></p>
+
+      <div class="exec-list" id="exec-list"></div>
+    </section>
+  </div>
+
   <script src="./app.js"></script>
 </body>
 </html>

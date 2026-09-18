@@ -60,5 +60,17 @@
       "createdAt": "2026-09-17T02:30:00.000Z",
       "updatedAt": "2026-09-17T02:30:00.000Z"
     }
+  ],
+  "executions": [
+    {
+      "id": "8003ede7-e668-45ee-8169-b6f51069efd4",
+      "method": "GET",
+      "url": "http://127.0.0.1:5064/demo/items?page=2&size=2",
+      "conclusion": "success",
+      "status": 200,
+      "timeMs": 8,
+      "reason": "",
+      "occurredAt": "2026-09-18T07:10:16.078Z"
+    }
   ]
 }

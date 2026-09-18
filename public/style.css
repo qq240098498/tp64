@@ -127,6 +127,11 @@ body {
   min-width: 0;
 }
 
+.layout-below {
+  max-width: 1320px;
+  margin: 18px auto 0;
+}
+
 .panel {
   padding: 18px 18px 20px;
   border: 1px solid var(--border);
@@ -814,6 +819,121 @@ input.invalid,
   word-break: break-all;
 }
 
+/* ---------- 执行记录 ---------- */
+
+.exec-filters {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.exec-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.exec-filter label {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.exec-filter-url {
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
+.exec-filter-conclusion {
+  width: 130px;
+}
+
+.exec-filter-time {
+  width: 200px;
+}
+
+.exec-filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.exec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.exec-item {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.exec-item:hover {
+  border-color: var(--border-strong);
+  background: #fbfcfe;
+}
+
+.exec-item-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.exec-conclusion {
+  padding: 1px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.exec-conclusion-success {
+  border-color: #b6dcc3;
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.exec-conclusion-failure {
+  border-color: #f0c2bc;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.exec-time {
+  margin-left: auto;
+  color: var(--text-soft);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.exec-url {
+  margin: 8px 0 0;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.exec-meta {
+  margin: 6px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.exec-reason {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--danger);
+  border-radius: 4px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12px;
+  word-break: break-all;
+}
+
 /* ---------- 窄屏 ---------- */
 
 @media (max-width: 1080px) {
@@ -837,5 +957,21 @@ input.invalid,
   .case-item,
   .demo-item {
     flex-direction: column;
+  }
+
+  .exec-filter-url,
+  .exec-filter-conclusion,
+  .exec-filter-time {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .exec-filter-actions {
+    width: 100%;
+  }
+
+  .exec-time {
+    margin-left: 0;
+    width: 100%;
   }
 }
